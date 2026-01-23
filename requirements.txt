@@ -1,0 +1,32 @@
+# Core RAG
+langchain==0.1.0
+langchain-openai==0.0.5
+langchain-anthropic==0.1.1
+langchain-community==0.0.19
+
+# Vector Store
+chromadb==0.4.22
+
+# Code Parsing
+# tree-sitter==0.20.4
+# tree-sitter-languages==1.10.2
+pygments==2.17.2
+
+# Git Operations
+gitpython==3.1.41
+
+# UI
+streamlit==1.31.0
+gradio==4.19.0
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.6.0
+
+# Development
+pytest==8.0.0
+black==24.1.1
+flake8==7.0.0
+
+# Monitoring (optional for later)
+# opentelemetry-api==1.22.0
