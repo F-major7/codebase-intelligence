@@ -1,6 +1,6 @@
 # Codebase Intelligence Assistant
 
-Production RAG system for code repositories. Semantic search + LLM synthesis with citation tracking.
+RAG system for code repositories. Semantic search + LLM synthesis with citation tracking.
 
 **Key Metrics**: 99.97% noise filtering | Sub-second retrieval | $0.002/query | 90%+ test coverage
 
