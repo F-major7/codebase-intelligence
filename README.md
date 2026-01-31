@@ -8,7 +8,7 @@ Production RAG system for semantic code search and natural language Q&A over sof
 
 ## Executive Summary
 
-This project demonstrates end-to-end ML systems engineering for code understanding. The system implements a multi-stage RAG pipeline that processes 33K+ file candidates down to 9 relevant files through intelligent filtering, performs structure-aware semantic chunking, and uses HNSW-indexed vector search for O(log N) retrieval. Key engineering decisions prioritize cost efficiency ($0.002/query with Claude Haiku), sub-second latency, and production robustness through comprehensive error handling. This is a complete retrieval system with thoughtful tradeoffs between accuracy, speed, and operational cost—not a prompt engineering exercise.
+This project demonstrates end-to-end ML systems engineering for code understanding. The system implements a multi-stage RAG pipeline that processes 33K+ file candidates down to 9 relevant files through intelligent filtering, performs structure-aware semantic chunking, and uses HNSW-indexed vector search for O(log N) retrieval. Key engineering decisions prioritize cost efficiency ($0.002/query with Claude Haiku), sub-second latency, and production robustness through comprehensive error handling. This is a complete retrieval system with thoughtful tradeoffs between accuracy, speed, and operational cost, not a prompt engineering exercise.
 
 ---
 
@@ -50,11 +50,11 @@ Developers spend 60-70% of their time reading code. Traditional keyword search m
 
 ## Retrieval & Chunking Design
 
-**Chunking Strategy**: Code differs from prose—natural boundaries occur at structural elements. Hierarchical separator approach prioritizes class/function boundaries over arbitrary character limits. 1000-character chunks balance precision (captures typical function bodies) with context (includes surrounding code). 200-character overlap prevents information loss at boundaries.
+**Chunking Strategy**: Code differs from prose, natural boundaries occur at structural elements. Hierarchical separator approach prioritizes class/function boundaries over arbitrary character limits. 1000-character chunks balance precision (captures typical function bodies) with context (includes surrounding code). 200-character overlap prevents information loss at boundaries.
 
 **Embedding**: OpenAI text-embedding-3-small for proven code understanding performance at $0.02/1M tokens. Considered local models but chose quality and development speed over eliminating API dependency.
 
-**Indexing**: HNSW (Hierarchical Navigable Small World) provides O(log N) approximate nearest neighbor search. ChromaDB chosen for zero-configuration local development and persistent SQLite backend—no cloud dependencies.
+**Indexing**: HNSW (Hierarchical Navigable Small World) provides O(log N) approximate nearest neighbor search. ChromaDB chosen for zero-configuration local development and persistent SQLite backend, no cloud dependencies.
 
 ---
 
@@ -99,7 +99,7 @@ Developers spend 60-70% of their time reading code. Traditional keyword search m
 **Optimized For**: Cost ($0.002/query), simplicity (zero-config ChromaDB), quality (90%+ test coverage), speed (sub-second retrieval)
 
 **Explicit Non-Goals**:
-- Real-time updates (manual re-indexing acceptable—2s for this codebase)
+- Real-time updates (manual re-indexing acceptable, 2s for this codebase)
 - Multi-repository comparison (reduced complexity in retrieval/context assembly)
 - Fine-tuned models (off-the-shelf sufficient, faster iteration)
 
