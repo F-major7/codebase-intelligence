@@ -114,7 +114,7 @@ Developers spend 60-70% of their time reading code. Traditional keyword search m
 
 ```bash
 # Installation
-git clone <repo-url> && cd codebase-intelligence
+git clone https://github.com/F-major7/codebase-intelligence && cd codebase-intelligence
 pip install -r requirements.txt
 
 # Configure
