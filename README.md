@@ -4,11 +4,13 @@ Production RAG system for semantic code search and natural language Q&A over sof
 
 **Key Metrics**: 99.97% noise filtering | Sub-400ms retrieval | $0.002/query | 90%+ test coverage
 
+**Live Demo**: https://codebias.streamlit.app/
+
 ---
 
 ## Executive Summary
 
-This project demonstrates end-to-end ML systems engineering for code understanding. The system implements a multi-stage RAG pipeline that processes 33K+ file candidates down to 9 relevant files through intelligent filtering, performs structure-aware semantic chunking, and uses HNSW-indexed vector search for O(log N) retrieval. Key engineering decisions prioritize cost efficiency ($0.002/query with Claude Haiku), sub-second latency, and production robustness through comprehensive error handling. This is a complete retrieval system with thoughtful tradeoffs between accuracy, speed, and operational cost, not a prompt engineering exercise.
+This project demonstrates end-to-end ML systems engineering for code understanding. The system implements a multi-stage RAG pipeline that processes 33K+ file candidates down to 9 relevant files through intelligent filtering, performs structure-aware semantic chunking, and uses HNSW-indexed vector search for O(log N) retrieval. Users can analyze any public GitHub repository by pasting a URL, with pre-loaded Flask, FastAPI, and Django collections for instant testing. Key engineering decisions prioritize cost efficiency ($0.002/query with Claude Haiku), sub-second latency, and production robustness through comprehensive error handling. This is a complete retrieval system with thoughtful tradeoffs between accuracy, speed, and operational cost, not a prompt engineering exercise.
 
 ---
 
@@ -40,7 +42,7 @@ Developers spend 60-70% of their time reading code. Traditional keyword search m
 
 ### Pipeline Stages
 
-**Ingestion**: Multi-layer filtering (extension whitelist, directory exclusion, size constraints, encoding validation) achieves 99.97% noise reduction. Structure-aware chunking via `RecursiveCharacterTextSplitter` with code-aware separators (classes → functions → blank lines) at 1000 chars with 200 char overlap. Embedded using OpenAI text-embedding-3-small (1536d), stored in ChromaDB with HNSW indexing.
+**Ingestion**: Multi-layer filtering (extension whitelist, directory exclusion, size constraints, encoding validation) achieves 99.97% noise reduction. Structure-aware chunking via `RecursiveCharacterTextSplitter` with code-aware separators (classes → functions → blank lines) at 1000 chars with 200 char overlap. Embedded using OpenAI text-embedding-3-small (1536d), stored in ChromaDB with HNSW indexing. Session-based repository isolation enables concurrent analysis of multiple codebases with dynamic collection management.
 
 **Retrieval**: Query embedded to same 1536d space, HNSW search with O(log N) complexity, cosine similarity scoring, top-k selection (k=5). Sub-400ms latency.
 
@@ -79,8 +81,9 @@ Developers spend 60-70% of their time reading code. Traditional keyword search m
 ### Limitations
 
 - Generic queries may retrieve descriptions over implementations (solution: specificity improves results)
-- Cross-repository reasoning not supported (single repo context)
 - Context window constraints for very long responses (mitigated by k=5 limit)
+- Streamlit Cloud: 1GB storage limit, ~20-30 custom repos capacity depending on size
+- Session-based storage: custom repos cleared after browser close to preserve space
 
 ---
 
@@ -100,7 +103,7 @@ Developers spend 60-70% of their time reading code. Traditional keyword search m
 
 **Explicit Non-Goals**:
 - Real-time updates (manual re-indexing acceptable, 2s for this codebase)
-- Multi-repository comparison (reduced complexity in retrieval/context assembly)
+- Cross-repository comparative analysis (single-context queries, reduced complexity)
 - Fine-tuned models (off-the-shelf sufficient, faster iteration)
 
 **Key Decisions**:
@@ -121,17 +124,21 @@ pip install -r requirements.txt
 echo "OPENAI_API_KEY=sk-proj-..." > .env
 echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
 
-# Index repository
-python -c "from src.ingestion.loader import CodebaseLoader; from src.ingestion.chunker import CodeChunker; from src.retrieval.vector_store import CodeVectorStore; loader = CodebaseLoader('.'); docs = loader.load_files(); chunker = CodeChunker(); chunks = chunker.chunk_documents(docs); vs = CodeVectorStore(); vs.create_index(chunks)"
-
 # Run
-python main.py              # CLI
 streamlit run app.py        # Web UI (http://localhost:8501)
+python main.py              # CLI (single-repo mode)
 pytest tests/ -v            # Tests
 ```
 
-### Testing New Repositories
+### Adding Custom Repositories
 
+**Via Web UI** (Recommended):
+1. Paste GitHub URL in sidebar (e.g., `https://github.com/owner/repo`)
+2. Click "Index Repository"
+3. Wait 1-3 minutes for indexing (progress shown)
+4. Select from dropdown and query
+
+**Via Python** (Programmatic):
 ```python
 from src.ingestion.loader import CodebaseLoader
 from src.ingestion.chunker import CodeChunker
@@ -141,13 +148,15 @@ loader = CodebaseLoader("../target-repo")
 docs = loader.load_files()
 chunker = CodeChunker()
 chunks = chunker.chunk_documents(docs)
-vs = CodeVectorStore(collection_name="target_repo", persist_dir="./chroma_db_target")
+vs = CodeVectorStore(collection_name="custom_repo", persist_dir="./chroma_db")
 vs.create_index(chunks)
 ```
 
 ---
 
 ## Future Work
+
+**Persistent User Accounts**: Saved repositories across sessions with authentication and quota management
 
 **Hybrid Retrieval**: Combine semantic + keyword search for better recall on specific identifiers
 
@@ -157,7 +166,7 @@ vs.create_index(chunks)
 
 **AST-Based Chunking**: Language-specific parsing for precise structural boundaries and type extraction
 
-**Multi-Repository Support**: Federated search enabling cross-repo comparative analysis
+**Cross-Repository Analysis**: Federated search enabling comparative queries across multiple codebases
 
 **Production Monitoring**: Retrieval precision metrics, latency percentiles, cost tracking, error rates
 
