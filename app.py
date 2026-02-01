@@ -9,6 +9,10 @@ from pathlib import Path
 import sys
 from dotenv import load_dotenv
 import uuid
+import re
+import tempfile
+import shutil
+import git
 
 # Load environment variables
 load_dotenv()
@@ -18,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.retrieval.vector_store import CodeVectorStore
 from src.generation.qa_chain import CodeQAChain
+from src.ingestion.loader import CodebaseLoader
+from src.ingestion.chunker import CodeChunker
 
 # Constants
 MODEL_OPTIONS = {
@@ -369,6 +375,138 @@ def handle_example_click(question: str) -> None:
     })
 
 
+def is_valid_github_url(url: str) -> bool:
+    """
+    Validate GitHub repository URL format.
+    
+    Args:
+        url: GitHub URL to validate
+        
+    Returns:
+        True if valid GitHub URL, False otherwise
+    """
+    pattern = r'https://github\.com/[\w-]+/[\w.-]+'
+    return bool(re.match(pattern, url))
+
+
+def extract_repo_info(url: str) -> tuple:
+    """
+    Extract owner and repo name from GitHub URL.
+    
+    Args:
+        url: GitHub repository URL
+        
+    Returns:
+        Tuple of (owner, repo_name)
+    """
+    # Remove trailing slash and .git if present
+    url = url.rstrip('/').replace('.git', '')
+    parts = url.split('/')
+    owner = parts[-2]
+    repo_name = parts[-1]
+    return owner, repo_name
+
+
+def index_github_repo(github_url: str, session_id: str) -> dict:
+    """
+    Clone and index a GitHub repository.
+    
+    Args:
+        github_url: GitHub repository URL
+        session_id: Current session ID
+        
+    Returns:
+        Dictionary with status, message, collection_name, and chunk_count
+    """
+    temp_dir = None
+    
+    try:
+        # Extract repo info
+        owner, repo_name = extract_repo_info(github_url)
+        
+        # Create temporary directory
+        temp_dir = tempfile.mkdtemp(prefix=f"rag_temp_{session_id}_{repo_name}_")
+        
+        # Clone repository
+        try:
+            git.Repo.clone_from(
+                github_url,
+                temp_dir,
+                depth=1,
+                single_branch=True
+            )
+        except git.exc.GitCommandError as e:
+            error_msg = str(e)
+            if "not found" in error_msg.lower() or "repository not found" in error_msg.lower():
+                return {
+                    "status": "error",
+                    "message": "Repository not found. Please check the URL."
+                }
+            elif "authentication" in error_msg.lower() or "permission denied" in error_msg.lower():
+                return {
+                    "status": "error",
+                    "message": "Cannot access private repositories. Use public repos only."
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Failed to clone repository: {error_msg}"
+                }
+        
+        # Load files
+        loader = CodebaseLoader(temp_dir)
+        documents = loader.load_files()
+        
+        if not documents:
+            return {
+                "status": "error",
+                "message": "Repository appears to be empty or has no supported code files."
+            }
+        
+        # Chunk documents
+        chunker = CodeChunker(chunk_size=1000, chunk_overlap=200)
+        chunks = chunker.chunk_documents(documents)
+        
+        if not chunks:
+            return {
+                "status": "error",
+                "message": "No chunks created from repository files."
+            }
+        
+        # Create collection name
+        collection_name = f"session_{session_id}_{repo_name}"
+        
+        # Create vector store and index
+        vector_store = CodeVectorStore(
+            collection_name=collection_name,
+            persist_dir="./chroma_db"
+        )
+        vector_store.create_index(chunks)
+        
+        return {
+            "status": "success",
+            "message": f"Successfully indexed {repo_name}",
+            "collection_name": collection_name,
+            "repo_name": repo_name,
+            "owner": owner,
+            "chunk_count": len(chunks)
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Unexpected error: {str(e)}"
+        }
+    
+    finally:
+        # Cleanup temporary directory
+        if temp_dir and Path(temp_dir).exists():
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                print(f"Warning: Failed to cleanup temp directory: {e}")
+
+
 # ============================================================================
 # SESSION STATE INITIALIZATION
 # ============================================================================
@@ -407,6 +545,12 @@ if "trigger_response" not in st.session_state:
 if "repo_switched" not in st.session_state:
     st.session_state.repo_switched = False
 
+if "user_repos" not in st.session_state:
+    st.session_state.user_repos = []
+
+if "is_indexing" not in st.session_state:
+    st.session_state.is_indexing = False
+
 # ============================================================================
 # SIDEBAR
 # ============================================================================
@@ -419,24 +563,110 @@ with st.sidebar:
     
     # Repository selector
     st.markdown("### 📦 Select Repository")
+    
+    # Build combined repo map
+    combined_repo_options = list(REPO_MAP.keys())
+    combined_repo_map = REPO_MAP.copy()
+    
+    # Add user repos if any
+    if st.session_state.user_repos:
+        combined_repo_options.append("--- Your Repositories ---")
+        for display_name, collection_name in st.session_state.user_repos:
+            combined_repo_options.append(display_name)
+            combined_repo_map[display_name] = collection_name
+    
+    # Find current index
+    try:
+        current_index = combined_repo_options.index(st.session_state.selected_repo_display)
+    except ValueError:
+        current_index = 3  # Default to RAG Project
+    
     selected_display_name = st.selectbox(
         "Choose a codebase to query:",
-        options=list(REPO_MAP.keys()),
-        index=list(REPO_MAP.keys()).index(st.session_state.selected_repo_display) if st.session_state.selected_repo_display in REPO_MAP.keys() else 3,
+        options=combined_repo_options,
+        index=current_index,
         key="repo_selector"
     )
     
-    selected_collection = REPO_MAP[selected_display_name]
+    # Skip if separator is selected
+    if selected_display_name != "--- Your Repositories ---":
+        selected_collection = combined_repo_map[selected_display_name]
+        
+        # Check if repository selection changed
+        if selected_collection != st.session_state.selected_repo:
+            st.session_state.selected_repo = selected_collection
+            st.session_state.selected_repo_display = selected_display_name
+            st.session_state.vector_store_loaded = False
+            st.session_state.vector_store = None
+            st.session_state.messages = []  # Clear conversation history
+            st.session_state.repo_switched = True
+            st.rerun()
     
-    # Check if repository selection changed
-    if selected_collection != st.session_state.selected_repo:
-        st.session_state.selected_repo = selected_collection
-        st.session_state.selected_repo_display = selected_display_name
-        st.session_state.vector_store_loaded = False
-        st.session_state.vector_store = None
-        st.session_state.messages = []  # Clear conversation history
-        st.session_state.repo_switched = True
-        st.rerun()
+    st.markdown("---")
+    
+    # GitHub Repository Indexing
+    st.markdown("### 🔗 Index GitHub Repo")
+    st.markdown("*Paste any public GitHub repo URL to analyze it*")
+    
+    github_url = st.text_input(
+        "GitHub Repository URL",
+        placeholder="https://github.com/owner/repo",
+        disabled=st.session_state.is_indexing,
+        key="github_url_input"
+    )
+    
+    index_button = st.button(
+        "🚀 Index Repository",
+        disabled=st.session_state.is_indexing or not github_url,
+        use_container_width=True
+    )
+    
+    if index_button:
+        # Validate URL
+        if not github_url:
+            st.error("Please enter a GitHub URL")
+        elif not is_valid_github_url(github_url):
+            st.error("❌ Invalid GitHub URL format. Use: https://github.com/owner/repo")
+        else:
+            st.session_state.is_indexing = True
+            
+            # Show progress
+            with st.spinner("🔄 Cloning repository..."):
+                time.sleep(0.5)  # Brief pause for UI feedback
+            
+            with st.spinner("📂 Loading files..."):
+                time.sleep(0.3)
+            
+            with st.spinner("✂️ Chunking code..."):
+                time.sleep(0.3)
+            
+            with st.spinner("🧠 Generating embeddings... (this may take 1-2 minutes)"):
+                result = index_github_repo(github_url, st.session_state.session_id)
+            
+            st.session_state.is_indexing = False
+            
+            if result["status"] == "success":
+                # Add to user repos
+                display_name = f"{result['owner']}/{result['repo_name']}"
+                st.session_state.user_repos.append((display_name, result["collection_name"]))
+                
+                # Switch to newly indexed repo
+                st.session_state.selected_repo = result["collection_name"]
+                st.session_state.selected_repo_display = display_name
+                st.session_state.vector_store_loaded = False
+                st.session_state.vector_store = None
+                st.session_state.messages = []
+                st.session_state.repo_switched = True
+                
+                st.success(f"✅ Successfully indexed **{result['repo_name']}**! ({result['chunk_count']:,} chunks)")
+                st.info("💡 You can now ask questions about this repository!")
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.error(f"❌ {result['message']}")
+    
+    if st.session_state.is_indexing:
+        st.info("⏳ Indexing in progress... This usually takes 1-3 minutes depending on repo size.")
     
     st.markdown("---")
     
