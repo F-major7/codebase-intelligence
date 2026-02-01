@@ -512,6 +512,56 @@ def delete_user_collections(session_id: str) -> dict:
         }
 
 
+def delete_specific_collections(collection_names: list) -> dict:
+    """
+    Delete specific collections by name.
+    
+    Args:
+        collection_names: List of collection names to delete
+        
+    Returns:
+        Dictionary with status, count, and size_freed
+    """
+    try:
+        # Get size before deletion
+        size_before = get_storage_size()
+        
+        # Connect to ChromaDB
+        client = chromadb.PersistentClient(path="./chroma_db")
+        
+        # Delete specified collections
+        deleted_count = 0
+        deleted_names = []
+        
+        for collection_name in collection_names:
+            try:
+                client.delete_collection(collection_name)
+                deleted_count += 1
+                deleted_names.append(collection_name)
+            except Exception as e:
+                print(f"Warning: Failed to delete {collection_name}: {e}")
+                continue
+        
+        # Get size after deletion
+        size_after = get_storage_size()
+        size_freed = size_before - size_after
+        
+        return {
+            "status": "success",
+            "count": deleted_count,
+            "size_freed": size_freed,
+            "deleted_names": deleted_names
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "count": 0,
+            "size_freed": 0
+        }
+
+
 def index_github_repo(github_url: str, session_id: str) -> dict:
     """
     Clone and index a GitHub repository.
@@ -661,6 +711,9 @@ if "storage_size" not in st.session_state:
 
 if "storage_last_updated" not in st.session_state:
     st.session_state.storage_last_updated = 0
+
+if "show_cleanup_selector" not in st.session_state:
+    st.session_state.show_cleanup_selector = False
 
 # ============================================================================
 # SIDEBAR
@@ -873,49 +926,82 @@ with st.sidebar:
     # Cleanup button (only show if user has repos)
     if len(st.session_state.user_repos) > 0:
         st.markdown("---")
+        st.markdown("### 🗑️ Manage Repositories")
         
-        cleanup_button = st.button(
-            f"🗑️ Clear My Repos ({len(st.session_state.user_repos)} repos)",
-            type="secondary",
-            use_container_width=True,
-            key="cleanup_repos"
+        # Repository selection for deletion
+        repo_options = [f"ALL ({len(st.session_state.user_repos)} repos)"] + [
+            f"{display_name}" for display_name, _ in st.session_state.user_repos
+        ]
+        
+        selected_repos = st.multiselect(
+            "Select repositories to delete:",
+            options=repo_options,
+            key="repos_to_delete"
         )
         
-        if cleanup_button:
-            # Confirmation
-            st.warning(f"⚠️ This will delete {len(st.session_state.user_repos)} repositories. Are you sure?")
+        # Delete button
+        if selected_repos:
+            delete_button = st.button(
+                f"🗑️ Delete Selected ({len(selected_repos) if 'ALL' not in selected_repos[0] else len(st.session_state.user_repos)} repos)",
+                type="secondary",
+                use_container_width=True,
+                key="delete_selected_repos"
+            )
             
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("✅ Yes, Delete", key="confirm_delete", use_container_width=True):
-                    # Delete collections
-                    result = delete_user_collections(st.session_state.session_id)
-                    
-                    if result["status"] == "success":
-                        # Clear user repos from session
-                        st.session_state.user_repos = []
+            if delete_button:
+                # Determine which repos to delete
+                if selected_repos[0].startswith("ALL"):
+                    # Delete all repos
+                    repos_to_delete = st.session_state.user_repos.copy()
+                    collection_names = [col_name for _, col_name in repos_to_delete]
+                else:
+                    # Delete selected repos
+                    repos_to_delete = [
+                        (display_name, col_name) 
+                        for display_name, col_name in st.session_state.user_repos 
+                        if display_name in selected_repos
+                    ]
+                    collection_names = [col_name for _, col_name in repos_to_delete]
+                
+                # Confirmation
+                st.warning(f"⚠️ This will delete {len(repos_to_delete)} repositories. Are you sure?")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Yes, Delete", key="confirm_delete", use_container_width=True):
+                        # Delete collections
+                        result = delete_specific_collections(collection_names)
                         
-                        # Update storage
-                        st.session_state.storage_size = get_storage_size()
-                        st.session_state.storage_last_updated = time.time()
-                        
-                        # Switch to default repo if current was deleted
-                        if st.session_state.selected_repo.startswith(f"session_{st.session_state.session_id}_"):
-                            st.session_state.selected_repo = "permanent_rag_project"
-                            st.session_state.selected_repo_display = "RAG Project (This Codebase)"
-                            st.session_state.vector_store_loaded = False
-                            st.session_state.vector_store = None
-                            st.session_state.messages = []
-                        
-                        st.success(f"✅ Deleted {result['count']} repos. Freed {format_size(result['size_freed'])}.")
-                        time.sleep(2)
+                        if result["status"] == "success":
+                            # Remove deleted repos from session
+                            deleted_display_names = [display_name for display_name, _ in repos_to_delete]
+                            st.session_state.user_repos = [
+                                (display_name, col_name) 
+                                for display_name, col_name in st.session_state.user_repos 
+                                if display_name not in deleted_display_names
+                            ]
+                            
+                            # Update storage
+                            st.session_state.storage_size = get_storage_size()
+                            st.session_state.storage_last_updated = time.time()
+                            
+                            # Switch to default repo if current was deleted
+                            if st.session_state.selected_repo in collection_names:
+                                st.session_state.selected_repo = "permanent_rag_project"
+                                st.session_state.selected_repo_display = "RAG Project (This Codebase)"
+                                st.session_state.vector_store_loaded = False
+                                st.session_state.vector_store = None
+                                st.session_state.messages = []
+                            
+                            st.success(f"✅ Deleted {result['count']} repos. Freed {format_size(result['size_freed'])}.")
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Error: {result.get('message', 'Unknown error')}")
+                
+                with col2:
+                    if st.button("❌ Cancel", key="cancel_delete", use_container_width=True):
                         st.rerun()
-                    else:
-                        st.error(f"❌ Error: {result.get('message', 'Unknown error')}")
-            
-            with col2:
-                if st.button("❌ Cancel", key="cancel_delete", use_container_width=True):
-                    st.rerun()
     
     st.markdown("---")
     
