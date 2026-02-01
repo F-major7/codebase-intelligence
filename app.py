@@ -607,10 +607,37 @@ if len(st.session_state.messages) == 0:
     st.markdown("---")
 
 # ============================================================================
+# CHAT INPUT AND MESSAGE HANDLING
+# ============================================================================
+
+# Check if there's an unanswered user message (from example button click)
+needs_response = False
+prompt = None
+
+if len(st.session_state.messages) > 0:
+    last_message = st.session_state.messages[-1]
+    if last_message["role"] == "user":
+        needs_response = True
+        prompt = last_message["content"]
+
+# Handle chat input (only if no pending response)
+if not needs_response:
+    if prompt := st.chat_input(f"Ask me anything about {st.session_state.selected_repo_display}..."):
+        # Add user message
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        needs_response = True
+
+# ============================================================================
 # CHAT HISTORY DISPLAY
 # ============================================================================
 
-for message in st.session_state.messages:
+# Display all messages except the last one if it needs a response
+messages_to_display = st.session_state.messages[:-1] if needs_response else st.session_state.messages
+
+for message in messages_to_display:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         
@@ -622,39 +649,14 @@ for message in st.session_state.messages:
                     st.markdown(f"- 📄 `{source}`")
 
 # ============================================================================
-# CHAT INPUT AND MESSAGE HANDLING
+# PROCESS PENDING MESSAGE
 # ============================================================================
 
-# Check if there's an unanswered user message (from example button click)
-needs_response = False
-if len(st.session_state.messages) > 0:
-    last_message = st.session_state.messages[-1]
-    if last_message["role"] == "user":
-        needs_response = True
-        prompt = last_message["content"]
-
-# Handle chat input
-if not needs_response:
-    if prompt := st.chat_input(f"Ask me anything about {st.session_state.selected_repo_display}..."):
-        # Add user message
-        st.session_state.messages.append({
-            "role": "user",
-            "content": prompt
-        })
-        needs_response = True
-
 # Process the message if needed
-if needs_response:
-    # Display user message if not already displayed
-    user_message_displayed = False
-    for message in st.session_state.messages:
-        if message["role"] == "user" and message["content"] == prompt:
-            user_message_displayed = True
-            break
-    
-    if not user_message_displayed:
-        with st.chat_message("user"):
-            st.markdown(prompt)
+if needs_response and prompt:
+    # Display the user message
+    with st.chat_message("user"):
+        st.markdown(prompt)
     
     # Generate response
     with st.chat_message("assistant"):
