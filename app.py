@@ -13,6 +13,8 @@ import re
 import tempfile
 import shutil
 import git
+import os
+import chromadb
 
 # Load environment variables
 load_dotenv()
@@ -407,6 +409,109 @@ def extract_repo_info(url: str) -> tuple:
     return owner, repo_name
 
 
+def get_storage_size() -> float:
+    """
+    Calculate total size of chroma_db directory in MB.
+    
+    Returns:
+        Size in megabytes
+    """
+    total = 0
+    chroma_path = './chroma_db'
+    
+    if not os.path.exists(chroma_path):
+        return 0.0
+    
+    for dirpath, dirnames, filenames in os.walk(chroma_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            try:
+                if os.path.exists(fp):
+                    total += os.path.getsize(fp)
+            except (OSError, PermissionError):
+                continue
+    
+    return total / (1024 * 1024)  # Convert to MB
+
+
+def get_storage_percent(max_storage_mb: float = 1024) -> float:
+    """
+    Calculate storage usage percentage.
+    
+    Args:
+        max_storage_mb: Maximum storage limit in MB
+        
+    Returns:
+        Usage percentage (0-100)
+    """
+    current_size = get_storage_size()
+    return (current_size / max_storage_mb) * 100
+
+
+def format_size(size_mb: float) -> str:
+    """
+    Format size in human-readable format.
+    
+    Args:
+        size_mb: Size in megabytes
+        
+    Returns:
+        Formatted string (e.g., "542MB" or "1.2GB")
+    """
+    if size_mb >= 1024:
+        return f"{size_mb / 1024:.1f}GB"
+    else:
+        return f"{size_mb:.0f}MB"
+
+
+def delete_user_collections(session_id: str) -> dict:
+    """
+    Delete all collections for current session.
+    
+    Args:
+        session_id: Current session ID
+        
+    Returns:
+        Dictionary with status, count, and size_freed
+    """
+    try:
+        # Get size before deletion
+        size_before = get_storage_size()
+        
+        # Connect to ChromaDB
+        client = chromadb.PersistentClient(path="./chroma_db")
+        collections = client.list_collections()
+        
+        # Delete collections matching session
+        deleted_count = 0
+        deleted_names = []
+        
+        for col in collections:
+            if col.name.startswith(f"session_{session_id}_"):
+                client.delete_collection(col.name)
+                deleted_count += 1
+                deleted_names.append(col.name)
+        
+        # Get size after deletion
+        size_after = get_storage_size()
+        size_freed = size_before - size_after
+        
+        return {
+            "status": "success",
+            "count": deleted_count,
+            "size_freed": size_freed,
+            "deleted_names": deleted_names
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "count": 0,
+            "size_freed": 0
+        }
+
+
 def index_github_repo(github_url: str, session_id: str) -> dict:
     """
     Clone and index a GitHub repository.
@@ -551,6 +656,12 @@ if "user_repos" not in st.session_state:
 if "is_indexing" not in st.session_state:
     st.session_state.is_indexing = False
 
+if "storage_size" not in st.session_state:
+    st.session_state.storage_size = 0.0
+
+if "storage_last_updated" not in st.session_state:
+    st.session_state.storage_last_updated = 0
+
 # ============================================================================
 # SIDEBAR
 # ============================================================================
@@ -608,16 +719,23 @@ with st.sidebar:
     st.markdown("### 🔗 Index GitHub Repo")
     st.markdown("*Paste any public GitHub repo URL to analyze it*")
     
+    # Check storage before allowing indexing
+    storage_percent = get_storage_percent()
+    storage_full = storage_percent >= 95
+    
+    if storage_full:
+        st.error("🔴 Storage nearly full! Remove repos before indexing new ones.")
+    
     github_url = st.text_input(
         "GitHub Repository URL",
         placeholder="https://github.com/owner/repo",
-        disabled=st.session_state.is_indexing,
+        disabled=st.session_state.is_indexing or storage_full,
         key="github_url_input"
     )
     
     index_button = st.button(
         "🚀 Index Repository",
-        disabled=st.session_state.is_indexing or not github_url,
+        disabled=st.session_state.is_indexing or not github_url or storage_full,
         use_container_width=True
     )
     
@@ -657,6 +775,10 @@ with st.sidebar:
                 st.session_state.vector_store = None
                 st.session_state.messages = []
                 st.session_state.repo_switched = True
+                
+                # Update storage cache
+                st.session_state.storage_size = get_storage_size()
+                st.session_state.storage_last_updated = time.time()
                 
                 st.success(f"✅ Successfully indexed **{result['repo_name']}**! ({result['chunk_count']:,} chunks)")
                 st.info("💡 You can now ask questions about this repository!")
@@ -714,6 +836,86 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.total_cost = 0.0
         st.rerun()
+    
+    st.markdown("---")
+    
+    # Storage Management
+    st.markdown("### 💾 Storage")
+    
+    # Update storage size (cache for 30 seconds)
+    current_time = time.time()
+    if current_time - st.session_state.storage_last_updated > 30:
+        st.session_state.storage_size = get_storage_size()
+        st.session_state.storage_last_updated = current_time
+    
+    # Calculate storage metrics
+    max_storage = 1024  # 1GB limit
+    storage_size = st.session_state.storage_size
+    storage_percent = (storage_size / max_storage) * 100
+    
+    # Display storage with color coding
+    storage_text = f"**{format_size(storage_size)} / {format_size(max_storage)}** ({storage_percent:.0f}%)"
+    
+    if storage_percent < 70:
+        st.success(f"✅ {storage_text}")
+    elif storage_percent < 90:
+        st.warning(f"⚠️ {storage_text}")
+    else:
+        st.error(f"🔴 {storage_text}")
+    
+    # Storage progress bar
+    st.progress(min(storage_percent / 100, 1.0))
+    
+    # Storage warnings
+    if 80 <= storage_percent < 95:
+        st.warning("⚠️ Storage at 80%. Consider removing old repos.")
+    
+    # Cleanup button (only show if user has repos)
+    if len(st.session_state.user_repos) > 0:
+        st.markdown("---")
+        
+        cleanup_button = st.button(
+            f"🗑️ Clear My Repos ({len(st.session_state.user_repos)} repos)",
+            type="secondary",
+            use_container_width=True,
+            key="cleanup_repos"
+        )
+        
+        if cleanup_button:
+            # Confirmation
+            st.warning(f"⚠️ This will delete {len(st.session_state.user_repos)} repositories. Are you sure?")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Yes, Delete", key="confirm_delete", use_container_width=True):
+                    # Delete collections
+                    result = delete_user_collections(st.session_state.session_id)
+                    
+                    if result["status"] == "success":
+                        # Clear user repos from session
+                        st.session_state.user_repos = []
+                        
+                        # Update storage
+                        st.session_state.storage_size = get_storage_size()
+                        st.session_state.storage_last_updated = time.time()
+                        
+                        # Switch to default repo if current was deleted
+                        if st.session_state.selected_repo.startswith(f"session_{st.session_state.session_id}_"):
+                            st.session_state.selected_repo = "permanent_rag_project"
+                            st.session_state.selected_repo_display = "RAG Project (This Codebase)"
+                            st.session_state.vector_store_loaded = False
+                            st.session_state.vector_store = None
+                            st.session_state.messages = []
+                        
+                        st.success(f"✅ Deleted {result['count']} repos. Freed {format_size(result['size_freed'])}.")
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Error: {result.get('message', 'Unknown error')}")
+            
+            with col2:
+                if st.button("❌ Cancel", key="cancel_delete", use_container_width=True):
+                    st.rerun()
     
     st.markdown("---")
     
