@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 import sys
 from dotenv import load_dotenv
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -20,8 +21,8 @@ from src.generation.qa_chain import CodeQAChain
 
 # Constants
 MODEL_OPTIONS = {
-    "Claude Haiku 4.5 ⚡ (Fast & Cheap)": "claude-haiku-4-5-20251001",
-    "Claude Sonnet 4.5 🧠 (Best Quality)": "claude-sonnet-4-5-20250929"
+    "Claude Haiku 4.5 (Fast & Cheap)": "claude-haiku-4-5-20251001",
+    "Claude Sonnet 4.5 (Best Quality)": "claude-sonnet-4-5-20250929"
 }
 
 MODEL_COSTS = {
@@ -29,12 +30,41 @@ MODEL_COSTS = {
     "claude-sonnet-4-5-20250929": {"input": 3.0, "output": 15.0}
 }
 
-EXAMPLE_QUESTIONS = [
-    "How does the file loader filter code files?",
-    "Explain the chunking strategy used in this project",
-    "What vector database is being used and why?",
-    "How does the Q&A generation work?"
-]
+# Repository mapping
+REPO_MAP = {
+    "Flask Web Framework": "permanent_flask",
+    "FastAPI Framework": "permanent_fastapi",
+    "Django Framework": "permanent_django",
+    "RAG Project (This Codebase)": "permanent_rag_project"
+}
+
+# Example questions per repository
+EXAMPLE_QUESTIONS_BY_REPO = {
+    "permanent_flask": [
+        "How does Flask handle URL routing?",
+        "Explain the Flask application context",
+        "How do Flask blueprints work?",
+        "What is the request/response cycle in Flask?"
+    ],
+    "permanent_fastapi": [
+        "How to create async endpoints in FastAPI?",
+        "Explain dependency injection in FastAPI",
+        "How does FastAPI handle request validation?",
+        "What are path operations in FastAPI?"
+    ],
+    "permanent_django": [
+        "How does Django ORM work?",
+        "Explain Django middleware",
+        "How to create custom management commands?",
+        "What is the Django request/response cycle?"
+    ],
+    "permanent_rag_project": [
+        "How does the file loader filter code files?",
+        "Explain the chunking strategy used in this project",
+        "What vector database is being used and why?",
+        "How does the Q&A generation work?"
+    ]
+}
 
 # ============================================================================
 # STREAMLIT CONFIGURATION
@@ -288,16 +318,18 @@ def estimate_cost(model: str, num_tokens: int) -> float:
     return input_cost + output_cost
 
 
-@st.cache_resource
-def load_vector_store() -> CodeVectorStore:
+def load_vector_store(collection_name: str) -> CodeVectorStore:
     """
-    Load the vector store (cached to avoid reloading on every interaction).
+    Load the vector store for a specific collection.
     
+    Args:
+        collection_name: Name of the ChromaDB collection to load
+        
     Returns:
         Initialized CodeVectorStore instance
     """
     vector_store = CodeVectorStore(
-        collection_name="codebase",
+        collection_name=collection_name,
         persist_dir="./chroma_db"
     )
     vector_store.load_index()
@@ -342,6 +374,10 @@ def handle_example_click(question: str) -> None:
 # SESSION STATE INITIALIZATION
 # ============================================================================
 
+# Generate unique session ID
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -360,11 +396,17 @@ if "total_cost" not in st.session_state:
 if "vector_store_loaded" not in st.session_state:
     st.session_state.vector_store_loaded = False
 
-if "current_repo" not in st.session_state:
-    st.session_state.current_repo = "This Project (Codebase Intelligence)"
+if "selected_repo" not in st.session_state:
+    st.session_state.selected_repo = "permanent_rag_project"
+
+if "selected_repo_display" not in st.session_state:
+    st.session_state.selected_repo_display = "RAG Project (This Codebase)"
 
 if "trigger_response" not in st.session_state:
     st.session_state.trigger_response = False
+
+if "repo_switched" not in st.session_state:
+    st.session_state.repo_switched = False
 
 # ============================================================================
 # SIDEBAR
@@ -373,6 +415,29 @@ if "trigger_response" not in st.session_state:
 with st.sidebar:
     st.markdown("## 🤖 Codebase Intelligence")
     st.markdown("*Your AI-powered code documentation assistant*")
+    
+    st.markdown("---")
+    
+    # Repository selector
+    st.markdown("### 📦 Select Repository")
+    selected_display_name = st.selectbox(
+        "Choose a codebase to query:",
+        options=list(REPO_MAP.keys()),
+        index=list(REPO_MAP.keys()).index(st.session_state.selected_repo_display) if st.session_state.selected_repo_display in REPO_MAP.keys() else 3,
+        key="repo_selector"
+    )
+    
+    selected_collection = REPO_MAP[selected_display_name]
+    
+    # Check if repository selection changed
+    if selected_collection != st.session_state.selected_repo:
+        st.session_state.selected_repo = selected_collection
+        st.session_state.selected_repo_display = selected_display_name
+        st.session_state.vector_store_loaded = False
+        st.session_state.vector_store = None
+        st.session_state.messages = []  # Clear conversation history
+        st.session_state.repo_switched = True
+        st.rerun()
     
     st.markdown("---")
     
@@ -390,15 +455,15 @@ with st.sidebar:
         st.session_state.qa_chain = None  # Force reinit
     
     # Repository info
-    st.markdown("### 📦 Repository")
+    st.markdown("### 📊 Current Repository")
     if st.session_state.vector_store_loaded and st.session_state.vector_store:
         try:
             stats = st.session_state.vector_store.get_stats()
-            st.info(f"**{st.session_state.current_repo}**\n\n📊 Indexed: {stats['total_chunks']} chunks")
+            st.info(f"**{st.session_state.selected_repo_display}**\n\n📦 Indexed: {stats['total_chunks']:,} chunks")
         except:
-            st.info(f"**{st.session_state.current_repo}**")
+            st.info(f"**{st.session_state.selected_repo_display}**")
     else:
-        st.info(f"**{st.session_state.current_repo}**")
+        st.info(f"**{st.session_state.selected_repo_display}**\n\n⏳ Loading...")
     
     st.markdown("---")
     
@@ -437,8 +502,16 @@ with st.sidebar:
 
 # Header
 st.markdown("# 🤖 Codebase Intelligence Assistant")
-st.markdown("*Ask me anything about this codebase. I'll search through the code and provide detailed explanations with citations.*")
+st.markdown("*Ask me anything about the selected codebase. I'll search through the code and provide detailed explanations with citations.*")
+
+# Show current repository prominently
+st.markdown(f"### 📦 Querying: **{st.session_state.selected_repo_display}**")
 st.markdown("")
+
+# Show repository switch notification
+if st.session_state.repo_switched:
+    st.success(f"✅ Switched to **{st.session_state.selected_repo_display}**. Previous conversation cleared.")
+    st.session_state.repo_switched = False
 
 # ============================================================================
 # VECTOR STORE INITIALIZATION
@@ -446,27 +519,40 @@ st.markdown("")
 
 if not st.session_state.vector_store_loaded:
     try:
-        with st.spinner("🔄 Loading vector database..."):
-            st.session_state.vector_store = load_vector_store()
+        with st.spinner(f"🔄 Loading vector database for {st.session_state.selected_repo_display}..."):
+            st.session_state.vector_store = load_vector_store(st.session_state.selected_repo)
             stats = st.session_state.vector_store.get_stats()
             st.session_state.vector_store_loaded = True
-            st.success(f"✅ Loaded {stats['total_chunks']} chunks from vector database")
+            st.success(f"✅ Loaded {stats['total_chunks']:,} chunks from **{st.session_state.selected_repo_display}**")
     except Exception as e:
         st.error(f"""
-        ❌ **Failed to load vector database**
+        ❌ **Failed to load vector database for {st.session_state.selected_repo_display}**
         
         Error: {str(e)}
         
         **Troubleshooting:**
-        1. Ensure the `chroma_db` directory exists
-        2. Run the ingestion pipeline first to create the vector database
+        1. Ensure the collection `{st.session_state.selected_repo}` exists in `chroma_db`
+        2. Run the indexing script to create permanent repositories:
+           ```bash
+           python index_permanent_repos.py
+           ```
         3. Check that OPENAI_API_KEY is set in your .env file
+        4. Try selecting a different repository from the sidebar
         
-        **To create the database, run:**
-        ```bash
-        python -c "from src.ingestion.loader import CodebaseLoader; from src.ingestion.chunker import CodeChunker; from src.retrieval.vector_store import CodeVectorStore; loader = CodebaseLoader('.'); docs = loader.load_files(); chunker = CodeChunker(); chunks = chunker.chunk_documents(docs); vs = CodeVectorStore(); vs.create_index(chunks)"
-        ```
+        **Available collections should include:**
+        - permanent_flask
+        - permanent_fastapi
+        - permanent_django
+        - permanent_rag_project
         """)
+        
+        # Provide fallback option
+        if st.button("🔄 Try RAG Project (Default)"):
+            st.session_state.selected_repo = "permanent_rag_project"
+            st.session_state.selected_repo_display = "RAG Project (This Codebase)"
+            st.session_state.vector_store_loaded = False
+            st.rerun()
+        
         st.stop()
 
 # Initialize QA chain if needed
@@ -493,24 +579,30 @@ if st.session_state.qa_chain is None:
 if len(st.session_state.messages) == 0:
     st.markdown("### 💡 Try asking:")
     
+    # Get example questions for current repository
+    current_examples = EXAMPLE_QUESTIONS_BY_REPO.get(
+        st.session_state.selected_repo, 
+        EXAMPLE_QUESTIONS_BY_REPO["permanent_rag_project"]
+    )
+    
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button(EXAMPLE_QUESTIONS[0], key="ex1", use_container_width=True):
-            handle_example_click(EXAMPLE_QUESTIONS[0])
+        if st.button(current_examples[0], key="ex1", use_container_width=True):
+            handle_example_click(current_examples[0])
             st.rerun()
         
-        if st.button(EXAMPLE_QUESTIONS[2], key="ex3", use_container_width=True):
-            handle_example_click(EXAMPLE_QUESTIONS[2])
+        if st.button(current_examples[2], key="ex3", use_container_width=True):
+            handle_example_click(current_examples[2])
             st.rerun()
     
     with col2:
-        if st.button(EXAMPLE_QUESTIONS[1], key="ex2", use_container_width=True):
-            handle_example_click(EXAMPLE_QUESTIONS[1])
+        if st.button(current_examples[1], key="ex2", use_container_width=True):
+            handle_example_click(current_examples[1])
             st.rerun()
         
-        if st.button(EXAMPLE_QUESTIONS[3], key="ex4", use_container_width=True):
-            handle_example_click(EXAMPLE_QUESTIONS[3])
+        if st.button(current_examples[3], key="ex4", use_container_width=True):
+            handle_example_click(current_examples[3])
             st.rerun()
     
     st.markdown("---")
@@ -535,7 +627,7 @@ for message in st.session_state.messages:
 # ============================================================================
 
 # Handle chat input
-if prompt := st.chat_input("Ask me anything about this codebase..."):
+if prompt := st.chat_input(f"Ask me anything about {st.session_state.selected_repo_display}..."):
     # Add user message
     st.session_state.messages.append({
         "role": "user",
@@ -550,7 +642,7 @@ if prompt := st.chat_input("Ask me anything about this codebase..."):
     with st.chat_message("assistant"):
         try:
             # Search phase
-            with st.spinner("🔍 Searching codebase..."):
+            with st.spinner(f"🔍 Searching {st.session_state.selected_repo_display}..."):
                 retrieved_chunks = st.session_state.vector_store.search(prompt, k=5)
             
             st.info(f"Found {len(retrieved_chunks)} relevant chunks")
@@ -594,6 +686,7 @@ if prompt := st.chat_input("Ask me anything about this codebase..."):
             - Ensure you have API credits available
             - Try switching to a different model
             - Verify your internet connection
+            - Ensure the selected repository is properly indexed
             """)
             
             # Add error message to history
