@@ -1,5 +1,5 @@
 """
-Codebase Intelligence Assistant - Streamlit Web Interface
+Codebase Intelligence Assistant (codeBIAS) - Streamlit Web Interface
 A beautiful, production-ready RAG-based code documentation assistant.
 """
 
