@@ -367,7 +367,6 @@ def handle_example_click(question: str) -> None:
         "role": "user",
         "content": question
     })
-    st.session_state.trigger_response = True
 
 
 # ============================================================================
@@ -626,17 +625,36 @@ for message in st.session_state.messages:
 # CHAT INPUT AND MESSAGE HANDLING
 # ============================================================================
 
+# Check if there's an unanswered user message (from example button click)
+needs_response = False
+if len(st.session_state.messages) > 0:
+    last_message = st.session_state.messages[-1]
+    if last_message["role"] == "user":
+        needs_response = True
+        prompt = last_message["content"]
+
 # Handle chat input
-if prompt := st.chat_input(f"Ask me anything about {st.session_state.selected_repo_display}..."):
-    # Add user message
-    st.session_state.messages.append({
-        "role": "user",
-        "content": prompt
-    })
+if not needs_response:
+    if prompt := st.chat_input(f"Ask me anything about {st.session_state.selected_repo_display}..."):
+        # Add user message
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        needs_response = True
+
+# Process the message if needed
+if needs_response:
+    # Display user message if not already displayed
+    user_message_displayed = False
+    for message in st.session_state.messages:
+        if message["role"] == "user" and message["content"] == prompt:
+            user_message_displayed = True
+            break
     
-    # Display user message
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    if not user_message_displayed:
+        with st.chat_message("user"):
+            st.markdown(prompt)
     
     # Generate response
     with st.chat_message("assistant"):
@@ -674,6 +692,9 @@ if prompt := st.chat_input(f"Ask me anything about {st.session_state.selected_re
             cost = estimate_cost(st.session_state.selected_model, int(estimated_tokens))
             st.session_state.total_cost += cost
             
+            # Rerun to show the updated conversation
+            st.rerun()
+            
         except Exception as e:
             error_msg = str(e)
             st.error(f"""
@@ -695,9 +716,4 @@ if prompt := st.chat_input(f"Ask me anything about {st.session_state.selected_re
                 "content": f"I encountered an error: {error_msg}",
                 "sources": []
             })
-
-# Handle example question trigger
-if st.session_state.trigger_response:
-    st.session_state.trigger_response = False
-    st.rerun()
 
