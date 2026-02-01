@@ -8,8 +8,8 @@ langchain-community==0.0.19
 chromadb==0.4.22
 
 # Code Parsing
-# tree-sitter==0.20.4
-# tree-sitter-languages==1.10.2
+tree-sitter==0.20.4
+tree-sitter-languages==1.10.2
 pygments==2.17.2
 
 # Git Operations
