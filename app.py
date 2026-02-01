@@ -806,35 +806,34 @@ if st.session_state.qa_chain is None:
 # ============================================================================
 
 if len(st.session_state.messages) == 0:
-    st.markdown("### 💡 Try asking:")
-    
-    # Get example questions for current repository
-    current_examples = EXAMPLE_QUESTIONS_BY_REPO.get(
-        st.session_state.selected_repo, 
-        EXAMPLE_QUESTIONS_BY_REPO["permanent_rag_project"]
-    )
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button(current_examples[0], key="ex1", use_container_width=True):
-            handle_example_click(current_examples[0])
-            st.rerun()
+    # Only show example questions for permanent repos (not user-indexed repos)
+    if st.session_state.selected_repo in EXAMPLE_QUESTIONS_BY_REPO:
+        st.markdown("### 💡 Try asking:")
         
-        if st.button(current_examples[2], key="ex3", use_container_width=True):
-            handle_example_click(current_examples[2])
-            st.rerun()
-    
-    with col2:
-        if st.button(current_examples[1], key="ex2", use_container_width=True):
-            handle_example_click(current_examples[1])
-            st.rerun()
+        # Get example questions for current repository
+        current_examples = EXAMPLE_QUESTIONS_BY_REPO[st.session_state.selected_repo]
         
-        if st.button(current_examples[3], key="ex4", use_container_width=True):
-            handle_example_click(current_examples[3])
-            st.rerun()
-    
-    st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button(current_examples[0], key="ex1", use_container_width=True):
+                handle_example_click(current_examples[0])
+                st.rerun()
+            
+            if st.button(current_examples[2], key="ex3", use_container_width=True):
+                handle_example_click(current_examples[2])
+                st.rerun()
+        
+        with col2:
+            if st.button(current_examples[1], key="ex2", use_container_width=True):
+                handle_example_click(current_examples[1])
+                st.rerun()
+            
+            if st.button(current_examples[3], key="ex4", use_container_width=True):
+                handle_example_click(current_examples[3])
+                st.rerun()
+        
+        st.markdown("---")
 
 # ============================================================================
 # CHAT INPUT AND MESSAGE HANDLING
