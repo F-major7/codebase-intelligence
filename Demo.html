@@ -605,7 +605,7 @@ function reset() {
 }
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-const API_BASE_URL = 'http://localhost:8000'; // swap for deployed URL after hosting
+const API_BASE_URL = 'https://codebase-intelligence.onrender.com';
 
 function renderSources(sources) {
   const svgFile = `<svg width="10" height="10" fill="none" viewBox="0 0 14 14"><path d="M8 1H3a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 3 13h8a1.5 1.5 0 0 0 1.5-1.5V5.5z" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v4.5H12.5" stroke="currentColor" stroke-width="1.2"/></svg>`;
