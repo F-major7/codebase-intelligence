@@ -1,11 +1,11 @@
 # Core RAG
-langchain==0.1.0
-langchain-openai==0.0.5
-langchain-anthropic==0.1.1
-langchain-community==0.0.19
+langchain==0.2.16
+langchain-openai==0.1.25
+langchain-anthropic==0.1.23
+langchain-community==0.2.16
 
 # Vector Store
-chromadb==0.4.22
+chromadb==0.5.23
 
 # Git Operations
 gitpython==3.1.41
