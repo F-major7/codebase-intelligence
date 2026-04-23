@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Try It — Codebase Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       oklch(8.5% 0.018 255);
+  --bg2:      oklch(11%  0.022 255);
+  --bg3:      oklch(14%  0.025 255);
+  --border:   oklch(22%  0.028 260);
+  --border2:  oklch(18%  0.022 260);
+  --text:     oklch(93%  0.008 255);
+  --muted:    oklch(52%  0.018 255);
+  --muted2:   oklch(38%  0.015 255);
+  --cyan:     oklch(75%  0.20  195);
+  --cyan-dim: oklch(55%  0.14  195);
+  --amber:    oklch(80%  0.17   65);
+  --purple:   oklch(70%  0.19  285);
+  --green:    oklch(72%  0.18  150);
+  --font:     'Space Grotesk', system-ui, sans-serif;
+  --mono:     'JetBrains Mono', 'Courier New', monospace;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── NAV ─── */
+nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+  background: oklch(8.5% 0.018 255 / 0.95);
+  backdrop-filter: blur(20px);
+  flex-shrink: 0;
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--text); text-decoration: none;
+}
+.nav-logo-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--cyan); box-shadow: 0 0 12px var(--cyan);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.7)} }
+.nav-right { display: flex; align-items: center; gap: 16px; }
+.nav-back {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--muted); text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-back:hover { color: var(--text); }
+.nav-badge {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  padding: 4px 10px; border-radius: 20px;
+  background: oklch(75% 0.20 195 / 0.1);
+  border: 1px solid oklch(75% 0.20 195 / 0.25);
+  color: var(--cyan);
+}
+
+/* ─── MAIN LAYOUT ─── */
+.demo-page {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ─── LEFT PANEL ─── */
+.left-panel {
+  grid-row: 1 / 3;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--bg2);
+}
+.left-header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.left-title {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted2); margin-bottom: 14px;
+}
+.repo-tabs {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.repo-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 7px;
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+  background: none; border: 1px solid transparent;
+  cursor: pointer; text-align: left; width: 100%;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.repo-btn:hover { color: var(--text); background: var(--bg3); }
+.repo-btn.active {
+  color: var(--cyan); background: oklch(75% 0.20 195 / 0.08);
+  border-color: oklch(75% 0.20 195 / 0.2);
+}
+.repo-btn-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border); flex-shrink: 0; transition: background 0.15s;
+}
+.repo-btn.active .repo-btn-dot { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+
+.custom-repo-area {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border2);
+}
+.custom-label {
+  font-size: 10px; font-weight: 500; color: var(--muted2);
+  letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;
+}
+.custom-input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 7px; padding: 9px 12px;
+  font-family: var(--mono); font-size: 11px; color: var(--text);
+  outline: none; transition: border-color 0.2s; margin-bottom: 8px;
+}
+.custom-input::placeholder { color: var(--muted2); }
+.custom-input:focus { border-color: var(--cyan-dim); }
+.custom-btn {
+  width: 100%; padding: 9px; border-radius: 7px;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--muted); font-family: var(--mono); font-size: 11px;
+  cursor: pointer; transition: border-color 0.15s, color 0.15s;
+}
+.custom-btn:hover { border-color: var(--cyan-dim); color: var(--cyan); }
+
+/* Sources list */
+.sources-header {
+  padding: 14px 20px 10px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted2);
+  border-bottom: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+.sources-list {
+  flex: 1; overflow-y: auto;
+}
+.source-item {
+  padding: 12px 20px; border-bottom: 1px solid var(--border2);
+  cursor: default; transition: background 0.15s;
+}
+.source-item.highlight { background: oklch(75% 0.20 195 / 0.05); }
+.source-file {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 11px; color: var(--cyan);
+  margin-bottom: 3px;
+}
+.source-score {
+  font-family: var(--mono); font-size: 10px; color: var(--muted2); margin-bottom: 5px;
+}
+.source-preview {
+  font-family: var(--mono); font-size: 10px; color: var(--muted2);
+  line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sources-empty {
+  padding: 32px 20px; text-align: center;
+  font-size: 12px; color: var(--muted2); line-height: 1.7;
+}
+
+/* ─── TOP BAR (pipeline) ─── */
+.top-bar {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+  display: flex; align-items: center; gap: 0;
+}
+.pipe-step {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted2); transition: color 0.3s;
+}
+.pipe-step.active { color: var(--cyan); }
+.pipe-step.done   { color: var(--green); }
+.pipe-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border2); transition: background 0.3s, box-shadow 0.3s; flex-shrink: 0;
+}
+.pipe-step.active .pipe-dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: ppulse 0.9s ease-in-out infinite; }
+.pipe-step.done   .pipe-dot { background: var(--green); box-shadow: none; animation: none; }
+@keyframes ppulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+.pipe-conn {
+  flex: 1; max-width: 48px; height: 1px;
+  background: var(--border2); margin: 0 8px; position: relative; overflow: hidden;
+}
+.pipe-conn-fill {
+  position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+  background: var(--green); transition: left 0.5s ease;
+}
+.pipe-conn.done .pipe-conn-fill { left: 0; }
+.pipe-status-msg {
+  margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--muted2);
+}
+
+/* ─── MAIN RIGHT PANE ─── */
+.right-pane {
+  display: flex; flex-direction: column; overflow: hidden; min-height: 0;
+}
+.query-bar {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border2);
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+.query-input {
+  flex: 1; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px;
+  font-family: var(--font); font-size: 14px; color: var(--text);
+  outline: none; transition: border-color 0.2s;
+}
+.query-input::placeholder { color: var(--muted2); }
+.query-input:focus { border-color: var(--cyan-dim); }
+.send-btn {
+  padding: 12px 22px; border-radius: 8px;
+  background: var(--cyan); color: oklch(10% 0.02 255);
+  border: none; font-family: var(--font); font-size: 13px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 8px;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 0 24px oklch(75% 0.20 195 / 0.2);
+  white-space: nowrap;
+}
+.send-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+.send-btn:disabled { opacity: 0.35; cursor: default; transform: none; }
+
+.examples-bar {
+  padding: 8px 24px 10px;
+  border-bottom: 1px solid var(--border2);
+  display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0;
+}
+.example-chip {
+  font-family: var(--mono); font-size: 10px; color: var(--muted2);
+  padding: 4px 11px; border: 1px solid var(--border2); border-radius: 20px;
+  cursor: pointer; transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+}
+.example-chip:hover { color: var(--cyan); border-color: oklch(75% 0.20 195 / 0.3); }
+
+/* ─── RESPONSE AREA ─── */
+.response-area {
+  flex: 1; overflow-y: auto;
+  padding: 28px 32px;
+}
+
+/* Idle state */
+.idle-state {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; text-align: center; color: var(--muted2);
+}
+.idle-icon { opacity: 0.25; margin-bottom: 4px; }
+.idle-state h3 { font-size: 16px; font-weight: 500; color: var(--muted); }
+.idle-state p { font-size: 13px; max-width: 380px; line-height: 1.7; }
+.idle-state .hint-list {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 8px; text-align: left;
+}
+.idle-state .hint-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted2);
+}
+.hint-num {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1px solid var(--border); display: flex; align-items: center;
+  justify-content: center; font-size: 9px; flex-shrink: 0; margin-top: 1px;
+}
+
+/* Thinking state */
+.thinking-state {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--mono); font-size: 12px; color: var(--muted2);
+  padding: 20px 0;
+}
+.think-dots span {
+  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--cyan); margin: 0 2px;
+  animation: tdot 1.2s ease-in-out infinite;
+}
+.think-dots span:nth-child(2) { animation-delay: 0.2s; }
+.think-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes tdot { 0%,80%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
+
+/* Answer */
+.answer-wrap {}
+.answer-query {
+  font-family: var(--mono); font-size: 11px; color: var(--muted2);
+  letter-spacing: 0.06em; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.answer-query::before { content: '›'; color: var(--cyan); font-size: 16px; }
+.answer-body {
+  font-size: 14px; line-height: 1.85; color: var(--text);
+}
+.answer-body p { margin-bottom: 14px; }
+.answer-body code {
+  font-family: var(--mono); font-size: 12px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  padding: 2px 7px; border-radius: 4px; color: var(--cyan);
+}
+.answer-body strong { color: var(--text); font-weight: 600; }
+.answer-citations {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 20px; padding-top: 18px;
+  border-top: 1px solid var(--border2);
+}
+.cite-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.03em;
+  padding: 5px 11px; border-radius: 5px;
+  background: oklch(75% 0.20 195 / 0.07);
+  border: 1px solid oklch(75% 0.20 195 / 0.2);
+  color: var(--cyan);
+}
+.answer-meta {
+  margin-top: 16px; display: flex; flex-wrap: wrap; gap: 20px;
+}
+.meta-item {
+  font-family: var(--mono); font-size: 10px; color: var(--muted2);
+  display: flex; align-items: center; gap: 7px;
+}
+.meta-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+/* Error */
+.error-msg {
+  font-family: var(--mono); font-size: 12px; color: oklch(70% 0.18 25);
+  background: oklch(70% 0.18 25 / 0.07);
+  border: 1px solid oklch(70% 0.18 25 / 0.2);
+  border-radius: 8px; padding: 16px 20px; line-height: 1.6;
+}
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted2); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="Codebase Intelligence.html">
+    <div class="nav-logo-dot"></div>
+    Codebase Intelligence
+  </a>
+  <div class="nav-right">
+    <span class="nav-badge">Live Demo</span>
+    <a class="nav-back" href="Codebase Intelligence.html">
+      <svg width="14" height="14" fill="none" viewBox="0 0 16 16"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Back to overview
+    </a>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="demo-page">
+
+  <!-- LEFT PANEL: repo selector + sources -->
+  <div class="left-panel">
+    <div class="left-header">
+      <div class="left-title">Repository</div>
+      <div class="repo-tabs" id="repo-tabs">
+        <button class="repo-btn active" data-repo="flask">
+          <div class="repo-btn-dot"></div>pallets/flask
+        </button>
+        <button class="repo-btn" data-repo="fastapi">
+          <div class="repo-btn-dot"></div>tiangolo/fastapi
+        </button>
+        <button class="repo-btn" data-repo="django">
+          <div class="repo-btn-dot"></div>django/django
+        </button>
+      </div>
+    </div>
+
+    <div class="custom-repo-area">
+      <div class="custom-label">Custom Repository</div>
+      <input class="custom-input" id="custom-input" type="text" placeholder="github.com/owner/repo" autocomplete="off" />
+      <button class="custom-btn" id="custom-btn">Index Repository →</button>
+    </div>
+
+    <div class="sources-header">Retrieved Sources</div>
+    <div class="sources-list" id="sources-list">
+      <div class="sources-empty">Source files will appear here once you run a query.</div>
+    </div>
+  </div>
+
+  <!-- TOP BAR: pipeline status -->
+  <div class="top-bar" id="top-bar">
+    <div class="pipe-step" id="ps-fetch"><div class="pipe-dot"></div>Fetch</div>
+    <div class="pipe-conn" id="pc-1"><div class="pipe-conn-fill"></div></div>
+    <div class="pipe-step" id="ps-filter"><div class="pipe-dot"></div>Filter</div>
+    <div class="pipe-conn" id="pc-2"><div class="pipe-conn-fill"></div></div>
+    <div class="pipe-step" id="ps-chunk"><div class="pipe-dot"></div>Chunk</div>
+    <div class="pipe-conn" id="pc-3"><div class="pipe-conn-fill"></div></div>
+    <div class="pipe-step" id="ps-retrieve"><div class="pipe-dot"></div>Retrieve</div>
+    <div class="pipe-conn" id="pc-4"><div class="pipe-conn-fill"></div></div>
+    <div class="pipe-step" id="ps-generate"><div class="pipe-dot"></div>Generate</div>
+    <div class="pipe-status-msg" id="pipe-msg"></div>
+  </div>
+
+  <!-- RIGHT PANE: query + response -->
+  <div class="right-pane">
+    <div class="query-bar">
+      <input class="query-input" id="query-input" type="text"
+        placeholder="Ask anything about the codebase — e.g. How does request routing work?"
+        autocomplete="off" />
+      <button class="send-btn" id="send-btn">
+        <svg width="13" height="13" fill="none" viewBox="0 0 16 16"><path d="M2 8h12M9 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Analyze
+      </button>
+    </div>
+    <div class="examples-bar" id="examples-bar"></div>
+    <div class="response-area" id="response-area">
+      <div class="idle-state">
+        <svg class="idle-icon" width="48" height="48" fill="none" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.2"/>
+          <path d="m16.5 16.5 3.5 3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M11 8v3M11 14h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <h3>Ready to analyze</h3>
+        <p>Select a repository on the left, type your question, and hit Analyze. The full pipeline runs live — fetching real source files from GitHub, chunking them, and grounding Claude's response in actual code.</p>
+        <div class="hint-list">
+          <div class="hint-item"><div class="hint-num">1</div>Choose a pre-loaded repo or paste a custom GitHub URL</div>
+          <div class="hint-item"><div class="hint-num">2</div>Pick an example query or write your own</div>
+          <div class="hint-item"><div class="hint-num">3</div>Watch the pipeline stages light up as each step completes</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const REPOS = {
+  flask: {
+    label: 'pallets/flask', owner: 'pallets', repo: 'flask', branch: 'main',
+    files: ['src/flask/app.py','src/flask/routing.py','src/flask/blueprints.py','src/flask/wrappers.py','src/flask/ctx.py'],
+    examples: ['How does request routing work?','What is the application context?','How are blueprints registered?','Explain the WSGI app interface']
+  },
+  fastapi: {
+    label: 'tiangolo/fastapi', owner: 'tiangolo', repo: 'fastapi', branch: 'master',
+    files: ['fastapi/applications.py','fastapi/routing.py','fastapi/dependencies/utils.py','fastapi/security/oauth2.py','fastapi/encoders.py'],
+    examples: ['How does dependency injection work?','How are routes registered?','Explain OAuth2 security handling','How is JSON encoding handled?']
+  },
+  django: {
+    label: 'django/django', owner: 'django', repo: 'django', branch: 'main',
+    files: ['django/http/request.py','django/views/generic/base.py','django/db/models/base.py','django/urls/resolvers.py','django/middleware/csrf.py'],
+    examples: ['How does the ORM base model work?','How does URL resolution work?','Explain CSRF middleware logic','How does the HttpRequest object work?']
+  }
+};
+
+let currentRepo = 'flask';
+let isRunning = false;
+
+// ─── Repo selection ───
+document.getElementById('repo-tabs').addEventListener('click', e => {
+  const btn = e.target.closest('[data-repo]');
+  if (!btn) return;
+  document.querySelectorAll('.repo-btn[data-repo]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentRepo = btn.dataset.repo;
+  reset();
+  renderExamples();
+});
+
+// ─── Custom repo ───
+document.getElementById('custom-btn').addEventListener('click', indexCustomRepo);
+document.getElementById('custom-input').addEventListener('keydown', e => { if (e.key === 'Enter') indexCustomRepo(); });
+
+async function indexCustomRepo() {
+  const raw = document.getElementById('custom-input').value.trim();
+  if (!raw) return;
+  const match = raw.match(/(?:github\.com\/)?([^\/\s]+)\/([^\/\s]+)/);
+  if (!match) { showError('Please enter a valid GitHub URL or owner/repo format'); return; }
+  const [, owner, repo] = match;
+  const collectionName = `${owner}_${repo}`;
+  setPipe('fetch'); setMsg('Cloning & indexing…');
+  setResponse(`<div class="thinking-state"><div class="think-dots"><span></span><span></span><span></span></div>Indexing ${owner}/${repo} via your RAG pipeline — this may take ~30s…</div>`);
+  document.getElementById('custom-btn').disabled = true;
+  try {
+    const res = await fetch(`${API_BASE_URL}/index`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ github_url: `https://github.com/${owner}/${repo}` })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Index error ${res.status}`);
+    }
+    const data = await res.json();
+
+    REPOS['_custom'] = {
+      label: `${owner}/${repo}`,
+      collectionName: data.collection_name,
+      examples: ['How does the main module work?', 'What are the core classes?', 'How is error handling done?']
+    };
+
+    let tab = document.querySelector('.repo-btn[data-repo="_custom"]');
+    if (!tab) {
+      tab = document.createElement('button');
+      tab.className = 'repo-btn';
+      tab.dataset.repo = '_custom';
+      tab.innerHTML = `<div class="repo-btn-dot"></div>${owner}/${repo}`;
+      document.getElementById('repo-tabs').appendChild(tab);
+    } else {
+      tab.innerHTML = `<div class="repo-btn-dot"></div>${owner}/${repo}`;
+    }
+    document.querySelectorAll('.repo-btn[data-repo]').forEach(b => b.classList.remove('active'));
+    tab.classList.add('active');
+    currentRepo = '_custom';
+    reset();
+    renderExamples();
+    setMsg(`${data.files_indexed} files · ${data.chunks_created} chunks`);
+    setTimeout(() => setMsg(''), 4000);
+  } catch (err) {
+    resetPipe(); setMsg('');
+    showError(err.message || 'Failed to index repository. Is the API server running?');
+  } finally {
+    document.getElementById('custom-btn').disabled = false;
+  }
+}
+
+// ─── Examples ───
+function renderExamples() {
+  const cfg = REPOS[currentRepo];
+  const el = document.getElementById('examples-bar');
+  if (!cfg) { el.innerHTML = ''; return; }
+  el.innerHTML = cfg.examples.map(q =>
+    `<span class="example-chip">${q}</span>`
+  ).join('');
+  el.querySelectorAll('.example-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.getElementById('query-input').value = chip.textContent;
+      runQuery();
+    });
+  });
+}
+
+// ─── Pipeline helpers ───
+const STEPS = ['fetch','filter','chunk','retrieve','generate'];
+function setPipe(activeStep) {
+  const idx = STEPS.indexOf(activeStep);
+  STEPS.forEach((s, i) => {
+    const el = document.getElementById('ps-' + s);
+    const conn = document.getElementById('pc-' + (i + 1));
+    el.classList.remove('active','done');
+    if (i < idx) { el.classList.add('done'); if (conn) conn.classList.add('done'); }
+    else if (i === idx) { el.classList.add('active'); if (conn) conn.classList.remove('done'); }
+    else { if (conn) conn.classList.remove('done'); }
+  });
+}
+function allDone() {
+  STEPS.forEach((s, i) => {
+    document.getElementById('ps-' + s).classList.replace('active','done') ||
+    document.getElementById('ps-' + s).classList.add('done');
+    const conn = document.getElementById('pc-' + (i + 1));
+    if (conn) conn.classList.add('done');
+  });
+}
+function resetPipe() {
+  STEPS.forEach((s, i) => {
+    const el = document.getElementById('ps-' + s);
+    el.classList.remove('active','done');
+    const conn = document.getElementById('pc-' + (i + 1));
+    if (conn) conn.classList.remove('done');
+  });
+}
+function setMsg(msg) { document.getElementById('pipe-msg').textContent = msg; }
+function setResponse(html) { document.getElementById('response-area').innerHTML = html; }
+function showError(msg) { setResponse(`<div class="error-msg">⚠ ${msg}</div>`); }
+function reset() {
+  resetPipe(); setMsg('');
+  document.getElementById('sources-list').innerHTML =
+    '<div class="sources-empty">Source files will appear here once you run a query.</div>';
+  setResponse(`<div class="idle-state">
+    <svg class="idle-icon" width="48" height="48" fill="none" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.2"/>
+      <path d="m16.5 16.5 3.5 3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M11 8v3M11 14h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <h3>Ready to analyze</h3>
+    <p>Type a question or pick one of the examples above.</p>
+  </div>`);
+}
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+const API_BASE_URL = 'http://localhost:8000'; // swap for deployed URL after hosting
+
+function renderSources(sources) {
+  const svgFile = `<svg width="10" height="10" fill="none" viewBox="0 0 14 14"><path d="M8 1H3a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 3 13h8a1.5 1.5 0 0 0 1.5-1.5V5.5z" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v4.5H12.5" stroke="currentColor" stroke-width="1.2"/></svg>`;
+  document.getElementById('sources-list').innerHTML = sources && sources.length
+    ? sources.map((c, i) => `
+        <div class="source-item${i === 0 ? ' highlight' : ''}">
+          <div class="source-file">${svgFile}${c.file_name || c.file_path.split('/').pop()}</div>
+          <div class="source-score">chunk ${(c.chunk_id ?? 0) + 1} · score ${(c.score ?? 0).toFixed(3)}</div>
+          <div class="source-preview">${(c.content || '').slice(0, 80).replace(/</g,'&lt;')}…</div>
+        </div>`).join('')
+    : '<div class="sources-empty">No sources retrieved.</div>';
+}
+
+function renderAnswer(query, answer, sources, chunksRetrieved, chunksSearched) {
+  const svgFile = `<svg width="9" height="9" fill="none" viewBox="0 0 14 14"><path d="M8 1H3a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 3 13h8a1.5 1.5 0 0 0 1.5-1.5V5.5z" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v4.5H12.5" stroke="currentColor" stroke-width="1.2"/></svg>`;
+  const filenames = [...new Set((sources || []).map(c => c.file_name || c.file_path.split('/').pop()))];
+  setResponse(`
+    <div class="answer-wrap">
+      <div class="answer-query">${query}</div>
+      <div class="answer-body">${formatAnswer(answer)}</div>
+      <div class="answer-citations">
+        ${filenames.map(f => `<span class="cite-chip">${svgFile}${f}</span>`).join('')}
+      </div>
+      <div class="answer-meta">
+        <div class="meta-item"><div class="meta-dot" style="background:var(--green)"></div>${chunksRetrieved} chunks retrieved</div>
+        <div class="meta-item"><div class="meta-dot" style="background:var(--cyan)"></div>${chunksSearched} chunks searched</div>
+        <div class="meta-item"><div class="meta-dot" style="background:var(--amber)"></div>Claude Haiku · ~$0.002</div>
+      </div>
+    </div>`);
+}
+
+// ─── Main query runner ───
+async function runQuery() {
+  const query = document.getElementById('query-input').value.trim();
+  if (!query || isRunning) return;
+  const cfg = REPOS[currentRepo];
+  if (!cfg) return;
+  isRunning = true;
+  document.getElementById('send-btn').disabled = true;
+
+  const repoKey = cfg.collectionName || currentRepo;
+
+  try {
+    setPipe('fetch');    setMsg('Fetching files…');
+    setResponse(`<div class="thinking-state"><div class="think-dots"><span></span><span></span><span></span></div>Starting pipeline for ${cfg.label}…</div>`);
+    await delay(400);
+
+    setPipe('filter');   setMsg('Filtering…');
+    setResponse(`<div class="thinking-state"><div class="think-dots"><span></span><span></span><span></span></div>Filtering by extension, size, encoding…</div>`);
+    await delay(350);
+
+    setPipe('chunk');    setMsg('Chunking…');
+    setResponse(`<div class="thinking-state"><div class="think-dots"><span></span><span></span><span></span></div>Splitting at class → function boundaries…</div>`);
+    await delay(350);
+
+    setPipe('retrieve'); setMsg('Searching HNSW index…');
+    setResponse(`<div class="thinking-state"><div class="think-dots"><span></span><span></span><span></span></div>Running semantic search over ChromaDB…</div>`);
+
+    const res = await fetch(`${API_BASE_URL}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo: repoKey, question: query })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `API error ${res.status}`);
+    }
+    const data = await res.json();
+
+    setPipe('generate'); setMsg('Generating…');
+    setResponse(`<div class="thinking-state"><div class="think-dots"><span></span><span></span><span></span></div>Synthesizing answer from retrieved context…</div>`);
+    await delay(200);
+
+    renderSources(data.sources);
+    allDone(); setMsg('Complete');
+    renderAnswer(query, data.answer, data.sources, data.chunks_retrieved, data.chunks_searched);
+
+  } catch (err) {
+    resetPipe(); setMsg('');
+    showError(err.message || 'API call failed. Is the server running? Try: uvicorn api:app --reload --port 8000');
+  } finally {
+    isRunning = false;
+    document.getElementById('send-btn').disabled = false;
+  }
+}
+
+function formatAnswer(text) {
+  return text.split('\n\n').filter(p => p.trim())
+    .map(p => `<p>${p.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')}</p>`)
+    .join('');
+}
+
+// ─── Wire up ───
+document.getElementById('send-btn').addEventListener('click', runQuery);
+document.getElementById('query-input').addEventListener('keydown', e => { if (e.key === 'Enter') runQuery(); });
+
+renderExamples();
+</script>
+</body>
+</html>
