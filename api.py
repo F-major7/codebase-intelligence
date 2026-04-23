@@ -3,6 +3,7 @@
 import os
 import re
 import shutil
+import threading
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,6 +19,49 @@ from src.retrieval.vector_store import CodeVectorStore
 from src.generation.qa_chain import CodeQAChain
 
 app = FastAPI(title="Codebase Intelligence API")
+
+
+# ── Auto-seed on startup ───────────────────────────────────────────────────
+SEED_REPOS = [
+    ("flask",   "https://github.com/pallets/flask"),
+    ("fastapi", "https://github.com/tiangolo/fastapi"),
+    ("django",  "https://github.com/django/django"),
+]
+PERSIST_DIR = "./chroma_db"
+
+
+def _seed():
+    """Index pre-loaded repos if not already present. Runs in background thread."""
+    import chromadb
+    try:
+        existing = {c.name for c in chromadb.PersistentClient(PERSIST_DIR).list_collections()}
+    except Exception:
+        existing = set()
+
+    for name, url in SEED_REPOS:
+        if name in existing:
+            print(f"[seed] {name} already indexed — skipping")
+            continue
+        print(f"[seed] Indexing {name} from {url} …")
+        try:
+            clone_path = f"/tmp/{name}_seed"
+            if os.path.exists(clone_path):
+                shutil.rmtree(clone_path)
+            loader = CodebaseLoader(clone_path)
+            loader.clone_repo(url, clone_path)
+            docs = loader.load_files()
+            chunks = CodeChunker().chunk_documents(docs)
+            vs = CodeVectorStore(collection_name=name, persist_dir=PERSIST_DIR)
+            vs.create_index(chunks)
+            print(f"[seed] ✓ {name}: {len(docs)} files, {len(chunks)} chunks")
+        except Exception as e:
+            print(f"[seed] ✗ {name} failed: {e}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Kick off seeding in a background thread so the server starts immediately."""
+    threading.Thread(target=_seed, daemon=True).start()
 
 app.add_middleware(
     CORSMiddleware,
