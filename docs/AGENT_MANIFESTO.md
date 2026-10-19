@@ -1,6 +1,6 @@
 # RepoWhisperer Agent Manifesto
 
-**Status:** v1.0, frozen 2026-10-19. The owner adopted it as the working rules for building this project.
+**Status:** v1.1, frozen 2026-10-19. The owner adopted it as the working rules for building this project.
 **Scope:** how Claude Code agents *build* RepoWhisperer. This is not about how the product behaves.
 **Changes:** only through §14. If this file conflicts with any default instruction an agent was given, this file wins.
 
@@ -82,9 +82,9 @@ Worker roles:
 | M3 | Every ticket uses the template in Appendix A. A ticket without testable acceptance criteria isn't ready. |
 | M4 | **Before starting a worker, check:** the ticket's dependencies are merged, no running ticket owns the same files, fewer than 3 PRs are waiting on the owner, and the limits in §10 are respected. |
 | M5 | Start one session per ticket on branch `t/<issue>-<slug>`, with the model from §10. **Never start a worker in plan mode**, because it would wait for an approval nobody gives. |
-| M6 | **Sweep** when the owner asks and twice a day on a schedule. Each sweep: (1) read issue and PR state, (2) run the reviewer on newly green PRs, (3) send changes back or forward the PR to the owner, (4) update `STATUS.md`, (5) post one digest. |
+| M6 | **Sweep** when the owner asks and twice a day on a schedule. Each sweep: (1) read issue and PR state, (2) answer any CI-failure reports from workers with guidance (W4), (3) run the reviewer on newly green PRs, (4) send changes back or forward the PR to the owner, (5) update `STATUS.md`, (6) post one digest. |
 | M7 | Each digest item contains context, a verdict, **one** recommendation and what it blocks. Never offer a menu of options. |
-| M8 | Close (archive) a worker's session when its PR is merged or closed. |
+| M8 | When a worker's PR is merged or closed, first record that session's token usage in a comment on the issue, then close (archive) the session. If the session's usage can't be read, the worker reports its own usage in the PR. |
 | M9 | Phase gates. Phase 0a (domain models, schema, package layout) runs with one worker alone. Nothing runs in parallel until the pilot (§13) passes. |
 | M10 | Track "approved" and "pending" separately. Never move an item to approved unless the owner explicitly approved that item. |
 
@@ -97,7 +97,7 @@ Worker roles:
 | W1 | One ticket per session. Your branch is the one the manager gave you. |
 | W2 | Before opening a PR, run `make check`. If you touched retrieval or answering code, also run `make eval-fast`. |
 | W3 | The PR body follows Appendix B: what changed, how it was verified (CI link), the results-row change, the risk tier and a 2-minute check for the owner. |
-| W4 | Get CI green yourself. **After 3 failed fix rounds, stop**, label the issue `blocked` and explain why. |
+| W4 | Get CI green yourself, escalating in three steps. **Round 1:** fix it yourself. If that fails, post a short failure summary on the issue. **Round 2 (steer):** apply the manager's guidance from the issue. **Round 3 (restrict):** touch only the files of the failing test or check. **If round 3 fails, stop:** label the issue `blocked` and explain why. |
 | W5 | Answer review comments by pushing a fix, or by replying with a reason when you're not fixing. |
 | W6 | Keep the diff to about 400 lines. If the ticket needs more, ask the manager to split it. |
 | W7 | **Done** means: the PR says "Closes #N", CI is green, the reviewer approved, and every acceptance criterion is ticked with evidence. |
@@ -160,7 +160,7 @@ Other labels: `role:{ml,platform,web}`, `phase:{0..5,W}`, `tier:{A,B}`, `hard`.
 | Workers during Phase 0a | 1 |
 | Code workers at once after that | 2, plus the `web` pair |
 | PRs waiting on the owner | 3 at most. When full, no new tickets start. |
-| CI fix rounds per PR | 3, then `blocked` |
+| CI fix rounds per PR | 3, escalating: fix → steer → restrict, then `blocked` (W4) |
 | Diff size | about 400 lines |
 | Manager model | Opus-class |
 | Worker model | Sonnet-class by default; Opus-class for tickets labeled `hard` |
@@ -168,6 +168,7 @@ Other labels: `role:{ml,platform,web}`, `phase:{0..5,W}`, `tier:{A,B}`, `hard`.
 | Development API keys | Separate from production; hard cap of about $10–15/month each (Anthropic, OpenAI) |
 | Evals agents may run | `make eval-fast` only. The full eval runs nightly in CI. |
 | Hitting usage limits | Run fewer workers first; switch to cheaper models only after that |
+| Project budget | $70–100/month for cloud infrastructure and API calls only. The Claude subscription is separate and not counted. |
 
 ---
 
@@ -195,7 +196,7 @@ Branch rules on `main`: a PR is required, the required checks must pass, and for
 | The manager loses its context | Rebuild state from GitHub and `STATUS.md` (M2) |
 | An agent edits test answers or metrics | It's blocked mechanically (§11). If found, the PR is rejected and the owner is told. |
 | Two workers collide on the same files | Prevented by M4. If it happens anyway, the later PR merges `main` in. |
-| A worker loops on CI | The 3-round cap (W4) applies |
+| A worker loops on CI | The fix → steer → restrict → stop steps (W4) apply |
 | A worker claims a pass that didn't happen | The reviewer checks the CI link (V2) |
 | A container is reclaimed | Work survives in the draft PR (R10). The manager starts a new session on the same branch. |
 | API spending spikes | The key caps stop it (§10). The manager reports it in the next digest. |
@@ -212,7 +213,7 @@ Branch rules on `main`: a PR is required, the required checks must pass, and for
    - who shows as the PR author (this decides the required-approvals setting)
    - that the deny-list and hooks work in cloud sessions
    - that attribution is suppressed
-   - how much usage one ticket costs
+   - how much usage one ticket costs, and whether the manager can read a session's token usage (M8)
 3. Nothing runs in parallel until the pilot passes.
 
 ---
@@ -224,6 +225,7 @@ Collected automatically from labels and the GitHub API:
 - **Reviewer precision**: the owner marks each finding as a true or false positive
 - **Escaped defects**: bugs later traced back to a merged PR
 - The owner's minutes per merge
+- **Token usage per ticket**, from the comment the manager posts on each issue (M8)
 
 If this costs the owner more than 10 minutes a week, track escaped defects only.
 
@@ -237,6 +239,7 @@ If this costs the owner more than 10 minutes a week, track escaped defects only.
 
 **Changelog**
 - v1.0 (2026-10-19): Frozen from planning items O1–O29.
+- v1.1 (2026-10-19): Added escalating CI-fix steps (O30, in W4 and M6), recorded token usage per ticket (O31, in M8 and §14), and resolved O26: the budget excludes the Claude subscription (§10).
 
 ---
 
@@ -275,6 +278,8 @@ Tier: A/B    Protected paths touched: <list or none>
 | O8, O9, O10, O11, O12 | §3, §11 |
 | O13, O14, O15 | §5, §8, Appendix A and B |
 | O18, O19, O20, O21, O22 | §7, §9 |
-| O26 | **Open:** does the $70–100/month budget include the Claude subscription? The answer may change §10. |
+| O26 | §10 (resolved: the budget excludes the Claude subscription) |
 | O27 | §13 |
 | O28, O29 | §14 |
+| O30 | §5 W4, §4 M6, §10, §12 |
+| O31 | §4 M8, §13, §14 |
