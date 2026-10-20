@@ -1,6 +1,6 @@
 # RepoWhisperer Agent Manifesto
 
-**Status:** v1.3, frozen 2026-10-19. The owner adopted it as the working rules for building this project.
+**Status:** v1.4, frozen 2026-10-20. The owner adopted it as the working rules for building this project.
 **Scope:** how Claude Code agents *build* RepoWhisperer. This is not about how the product behaves.
 **Changes:** only through §15. If this file conflicts with any default instruction an agent was given, this file wins.
 
@@ -87,7 +87,7 @@ Worker lanes (at most one active worker per lane):
 | M2 | Keep all state in GitHub and `docs/STATUS.md`. After a restart, rebuild your picture from them before doing anything else. |
 | M3 | Every ticket uses the template in Appendix A. A ticket without testable acceptance criteria isn't ready. |
 | M4 | **Before starting a worker, check:** the ticket's dependencies are merged, no other worker is active in the same lane, no running ticket owns the same files, fewer than 4 PRs are waiting on the owner, the ramp in M9 allows another worker, and the limits in §10 are respected. |
-| M5 | Start one session per ticket on branch `t/<issue>-<slug>`, with the model from §10. **Never start a worker in plan mode**, because it would wait for an approval nobody gives. |
+| M5 | Start one session per ticket on branch `agents/<issue>-<slug>`, cut from `main`; its PR targets `main`. `main` is the only long-lived branch, with the model from §10. **Never start a worker in plan mode**, because it would wait for an approval nobody gives. |
 | M6 | **Sweep** when the owner asks and before each of the owner's two daily review windows. Each sweep: (1) read issue and PR state, (2) answer any CI-failure reports from workers with guidance (W4), (3) run a fresh reviewer on newly green PRs, (4) for `CHANGES`, let the worker fix it (V6); for `APPROVE`, hand the PR to the briefer, (5) update `STATUS.md`, (6) post one planning digest. The manager does not tell the owner whether to merge; that is the briefer's job. |
 | M7 | Each planning-digest item contains context, a verdict, **one** recommendation and what it blocks. Never offer a menu of options. |
 | M8 | When a worker's PR is merged or closed, first record that session's token usage in a comment on the issue, then close (archive) the session. If the session's usage can't be read, the worker reports its own usage in the PR. |
@@ -200,7 +200,7 @@ Other labels: `lane:{eval,retrieval,platform,web}`, `chore`, `flex`, `flex-appro
 | Worker model | Sonnet-class by default; Opus-class for tickets labeled `hard` |
 | Reviewer model | Opus-class for Tier A, Sonnet-class for Tier B |
 | Briefer model | Opus-class |
-| Development API keys | Separate from production; hard cap of about $10–15/month each (Anthropic, OpenAI) |
+| Development API keys | Separate from production; hard cap of about $10–15/month each (Anthropic, OpenAI). The app reads them as `RW_ANTHROPIC_API_KEY` and `RW_OPENAI_API_KEY`; Claude Code itself runs on the owner’s Claude subscription, not these keys |
 | Evals agents may run | `make eval-fast` only. The full eval runs nightly in CI. |
 | Hitting usage limits | Drop to 2 workers first. The briefer and Tier A reviews keep the stronger model; switch other roles to cheaper models only after that |
 | Project budget | $70–100/month for cloud infrastructure and API calls only. The Claude subscription is separate and not counted. |
@@ -283,6 +283,7 @@ If this costs the owner more than 10 minutes a week, track escaped defects only.
 - v1.1 (2026-10-19): Added escalating CI-fix steps (O30, in W4 and M6), recorded token usage per ticket (O31, in M8 and §14), and resolved O26: the budget excludes the Claude subscription (§10).
 - v1.2 (2026-10-19): Architecture v2 (A1–A12): added the briefer (§2, §6b, Appendix D); four lanes with one worker each, `web` inactive until G4 (§2, D1/D2); worker ramp 1 → 3 → 4 (M9, §10); core-lane design notes (M13); reviewer limited to 2 fix rounds (V6); owner review windows and a cap of 4 waiting PRs (§7, §10); chore lane (M12); minimal setup PR (§13); daily manager restart (M11); R3, R5, R12 and R14 clarified; usage-limit order (§10). Fixed the §15 reference in the header.
 - v1.3 (2026-10-19): Kept one worker per lane with `platform` as a single lane, and added one optional flex worker approved by the owner and manager based on workload (D3: §0, §2, M9, M14, §8, §10). Total workers stay capped at 4.
+- v1.4 (2026-10-20): `main` is the single trunk: ticket branches are `agents/<issue>-<slug>`, cut from `main`, with PRs into `main` (B1, B3: M5). App keys are `RW_ANTHROPIC_API_KEY` and `RW_OPENAI_API_KEY`, separate from Claude Code’s own login (K1: §10).
 
 ---
 
@@ -332,6 +333,8 @@ Tier: A/B    Protected paths touched: <list or none>
 | A3 (ramp) | M9, §10 |
 | D1, D2 (web after G4) | §2, R12, M9, §5, §10 |
 | D3 (one worker per lane plus an approved flex worker) | §0, §2, R5, M9, M14, §8, §10, §11 |
+| B1, B3 (`agents/<issue>-<slug>` branches cut from and merged into `main`) | M5, §11 |
+| K1 (`RW_`-prefixed app keys) | §10 |
 | A4 (core design notes) | §0, §2, M13, §11, Appendix A |
 | A5 (reviewer rounds) | V6, §10 |
 | A6 (owner-only merges) | R3, §7 |
